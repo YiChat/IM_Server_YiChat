@@ -1,0 +1,14 @@
+${ util.include('header', [title:'User details']) }
+<table style="margin: auto;">
+<tr>
+<td>
+<img style="max-height: 100px; max-width: 100px;" src="${util.link("/avatar/" + result?.user?.jid)}" />
+</td>
+<td>
+<b>User:   </b>${result?.user?.jid}<br/>
+<b>Domain: </b>${result?.user?.domain}<br/>
+<b>UID:    <b/>${result?.user?.uid}<br/>
+</td>
+</tr>
+</table>
+${ util.include('footer') }

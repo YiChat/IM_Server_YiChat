@@ -1,0 +1,169 @@
+${ util.include('header', [title: result?.stats?.component + ' statistics', 
+    imports: [
+	[ type: 'css', content:'.chart-bar-legend { display: block; } .chart-bar-legend > li { width: 100; display: block; padding: 2px; }' ]
+    ]]) }
+<script src="${request.getContextPath()}/static/Chart.min.js" ></script>
+<script src="${request.getContextPath()}/static/chart_legend_templates.js" ></script>
+
+<% def userConnections = null;
+   def tmp = result.stats.data.findAll { it.var.contains(' user connections') };
+   if (tmp && !tmp.isEmpty()) { 
+		userConnections = [
+			labels : [],
+			datasets: [[
+				label: 'User connections',
+				fillColor: "rgba(151,187,205,0.5)",
+				strokeColor: "rgba(151,187,205,0.8)",
+				highlightFill: "rgba(151,187,205,0.75)",
+				highlightStroke: "rgba(151,187,205,1)",
+				data: []
+			]]
+		];
+		['Open','Closed','Total','Maximum'].each { name ->
+			userConnections.labels.add(name);
+			userConnections.datasets[0].data.add( Integer.parseInt((tmp.find { it.var.contains(name) }).value) );
+		}
+   } 
+   def userSessions = null;
+   tmp = result.stats.data.findAll { it.var.contains(' user sessions') };
+   if (tmp && !tmp.isEmpty()) { 
+		userSessions = [
+			labels : [],
+			datasets: [[
+				label: 'User sessions',
+				fillColor: "rgba(151,187,205,0.5)",
+				strokeColor: "rgba(151,187,205,0.8)",
+				highlightFill: "rgba(151,187,205,0.75)",
+				highlightStroke: "rgba(151,187,205,1)",
+				data: []				
+			]]
+		];
+		['Open','Total','Maximum'].each { name ->
+			userSessions.labels.add(name);
+			userSessions.datasets[0].data.add( Integer.parseInt((tmp.find { it.var.contains(name) }).value) );
+		}
+   } 
+   def processors = null;
+   tmp = result.stats.data.findAll { it.var.contains('/Processor: ') };
+   if (tmp && !tmp.isEmpty()) {
+		processors = [
+			labels : [],
+			datasets : [[
+				label: 'Processors average processing time',
+				fillColor: "rgba(151,187,205,0.5)",
+				strokeColor: "rgba(151,187,205,0.8)",
+				highlightFill: "rgba(151,187,205,0.75)",
+				highlightStroke: "rgba(151,187,205,1)",
+				data: []			
+			]]
+		];
+		tmp.each {
+			processors.labels.add(it.var.replace(result.stats.component+'/Processor: ', ''));
+			processors.datasets[0].data.add(Integer.parseInt(it.value.split(',')[2].split(':')[1].trim()));
+		}
+   }
+ %>
+<table>
+	<tr><td>
+		<canvas id="packetsRecvSent" width="180" height="400"></canvas>
+		<div id='packetsRecvSent-legend'></div>
+	</td>	
+<% if (userConnections) { %>
+	<td><canvas id="userConnections" width="180" height="400"></canvas><div id='userConnections-legend'></div></td>
+	<td><canvas id="userSessions" width="180" height="400"></canvas><div id='userSessions-legend'></div></td>
+	<td colspan='3'><canvas id="processors" width="800" height="400"></canvas><div id='processors-legend'></div></td>
+<% } %>
+	</tr>
+	<tr><td colspan="6">
+		<canvas id="packetsPerInThread" width="1400" height="300"></canvas>	
+	</td></tr>
+	<tr><td colspan="6">
+		<canvas id="packetsPerOutThread" width="1400" height="300"></canvas>	
+	</td></tr>	
+</table>
+
+<% 
+	def packetsRecvSent = [
+		labels: ['Packets (total)'],
+		datasets: [[
+			label: 'Received',
+			fillColor: "rgba(220,220,220,0.5)",
+            strokeColor: "rgba(220,220,220,0.8)",
+            highlightFill: "rgba(220,220,220,0.75)",
+            highlightStroke: "rgba(220,220,220,1)",
+            data: [ Integer.parseInt((result.stats.data.find { it.var == (result.stats.component+'/Packets received') }).value) ]
+		],[
+			label: 'Sent',
+			fillColor: "rgba(151,187,205,0.5)",
+            strokeColor: "rgba(151,187,205,0.8)",
+            highlightFill: "rgba(151,187,205,0.75)",
+            highlightStroke: "rgba(151,187,205,1)",
+            data: [ Integer.parseInt((result.stats.data.find { it.var == (result.stats.component+'/Packets sent') }).value) ]		
+		]]
+	];
+	
+	def packetsPerInThread = [ labels: [], datasets: [[
+		label:'Packets per "in" thread',
+		fillColor: "rgba(151,187,205,0.5)",
+        strokeColor: "rgba(151,187,205,0.8)",
+        highlightFill: "rgba(151,187,205,0.75)",
+        highlightStroke: "rgba(151,187,205,1)",
+		data : []
+	]] ];
+	def inData = result.stats.data.findAll { it.var.contains('Processed packets thread: in_') }
+	inData.each {
+		packetsPerInThread.labels.add(it.var.replace(result.stats.component+"/Processed packets thread: ", ""));
+		packetsPerInThread.datasets[0].data.add(Integer.parseInt(it.value));			
+	}
+
+	def packetsPerOutThread = [ labels: [], datasets: [[
+		label:'Packets per "out" thread',
+		fillColor: "rgba(151,187,205,0.5)",
+        strokeColor: "rgba(151,187,205,0.8)",
+        highlightFill: "rgba(151,187,205,0.75)",
+        highlightStroke: "rgba(151,187,205,1)",
+		data : []
+	]] ];
+	inData = result.stats.data.findAll { it.var.contains('Processed packets thread: out_') }
+	inData.each {
+		packetsPerOutThread.labels.add(it.var.replace(result.stats.component+"/Processed packets thread: ", ""));
+		packetsPerOutThread.datasets[0].data.add(Integer.parseInt(it.value));			
+	}
+
+%>
+
+<script>
+<% if (userConnections) { %>
+	var userConnectionsData =  ${groovy.json.JsonOutput.toJson(userConnections)};	
+	var userConnectionsCtx = document.getElementById("userConnections").getContext("2d");
+	var userConnectionsChart = new Chart(userConnectionsCtx).Bar(userConnectionsData, { legendTemplate : templateLegends.bar });
+	document.getElementById('userConnections-legend').innerHTML = userConnectionsChart.generateLegend();
+
+	var userSessionsData =  ${groovy.json.JsonOutput.toJson(userSessions)};	
+	var userSessionsCtx = document.getElementById("userSessions").getContext("2d");
+	var userSessionsChart = new Chart(userSessionsCtx).Bar(userSessionsData, { legendTemplate : templateLegends.bar });
+	document.getElementById('userSessions-legend').innerHTML = userSessionsChart.generateLegend();
+		
+	var processorsData =  ${groovy.json.JsonOutput.toJson(processors)};	
+	var processorsCtx = document.getElementById("processors").getContext("2d");
+	var processorsChart = new Chart(processorsCtx).Bar(processorsData, { legendTemplate : templateLegends.bar });
+	document.getElementById('processors-legend').innerHTML = processorsChart.generateLegend();		
+<% } %>
+	
+	var packetsRecvSentData =  ${groovy.json.JsonOutput.toJson(packetsRecvSent)};
+	
+	var packetsRecvSentCtx = document.getElementById("packetsRecvSent").getContext("2d");
+	var packetsRecvSentChart = new Chart(packetsRecvSentCtx).Bar(packetsRecvSentData, { legendTemplate : templateLegends.bar });
+	document.getElementById('packetsRecvSent-legend').innerHTML = packetsRecvSentChart.generateLegend();
+	
+	var packetsPerInThreadData = ${groovy.json.JsonOutput.toJson(packetsPerInThread)};
+	var packetsPerInThreadCtx = document.getElementById("packetsPerInThread").getContext("2d");
+	var packetsPerInThreadChart = new Chart(packetsPerInThreadCtx).Bar(packetsPerInThreadData, { legendTemplate : templateLegends.bar });
+
+	var packetsPerOutThreadData = ${groovy.json.JsonOutput.toJson(packetsPerOutThread)};
+	var packetsPerOutThreadCtx = document.getElementById("packetsPerOutThread").getContext("2d");
+	var packetsPerOutThreadChart = new Chart(packetsPerOutThreadCtx).Bar(packetsPerOutThreadData, { legendTemplate : templateLegends.bar });
+
+</script>
+
+${ util.include('footer') }

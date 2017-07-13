@@ -1,0 +1,71 @@
+${ util.include('header', [title: 'Index',
+    imports: [
+		[
+			type:'css', 
+			content: '* {font-family: \'Droid Sans\', sans-serif; } \ndiv.content { font-size: 0.8em; }\ndiv.code { background-color:whitesmoke; padding: 3px; margin:3px 5px; }'
+		]
+    ]]) }
+<script>
+var toggleVisibility = function(id, group) {
+	var els = document.getElementsByClassName(group);
+	for (var i=0; i<els.length; i++) {
+		els[i].style.display = 'none';
+	}
+	var el = document.getElementById(id);
+	el.style.display = 'inline-block';
+}
+</script>
+<div style="width: 80%; clear: both; margin: 0.5em 10%;">
+This is a list of currently available and installed features of REST API.<br/>
+To see details of each request, click on this item and it will expand showing description of usage.<br/>
+<br/>
+In this examples we present example request content and response content in form of XML as this is default format used for content by Tigase XMPP Server and it's REST API.
+However by different format may be used. Currently Tigase XMPP Server supports JSON or XML:<br/>
+To use JSON format you need to pass <em>application/json</em> as <em>type</em> url paramter of HTTP request or by passing same value as value of <em>Content-Type</em> HTTP request header.<br/>
+To ensure use of XML format you need to pass <em>application/xml</em> as <em>type</em> url paramter of HTTP request or by passing same value as value of <em>Content-Type</em> HTTP request header.<br/>
+<br/><u><strong>Note:</strong></u> If no <em>type</em> attribute is passed and <em>Content-Type</em> is set to <em>text/html</em> then response may not be sent in form of JSON or XML but in user readable form of HTML web page.<br/>
+</div>
+<div>
+<% 
+def colors = [ 
+	'GET' : '#0f6ab4',
+	'POST' : '#547f00',
+	'PUT' : '#c5862b',
+	'DELETE' : '#a41e22'
+];
+def servlets = [];
+servlets.addAll(result.service.module.restServlets);
+servlets = servlets.findAll { it.handlers.values().find { !it.isEmpty() } }
+servlets.sort { it.getServletContext()?.getContextPath() } 
+servlets.each { 
+	def prefix = request.getContextPath() + it.getInitParameter("mapping").replace("/*","");
+	def handlers = [];
+	it.handlers.values().each { v ->
+		handlers.addAll(v);
+	}
+	handlers = handlers.unique();
+	handlers.sort { it.regexDescription ?: it.regex }
+	handlers.each { handler ->
+		["GET","PUT","POST","DELETE"].each { method ->
+			if (!handler."exec${method.toLowerCase().capitalize()}") 
+				return;
+			def color = colors[method];
+			def id = java.util.UUID.randomUUID().toString();
+%>
+<div style="width: 80%; clear: both; margin: 0.5em 10%; border: 1px solid ${color}; display: inline-block; background-color: ${color}">
+	<div style="background-color: rgba(255,255,255,0.8);display: inline-block; width:100%;" onclick="toggleVisibility('${id}','description')">
+	<div class="method" style="float:left;width:50px;border-radius: 2px;padding: 6px;background-color:${color};color: white;font-size: 0.9em;text-align: center;">${method}</div>
+	<div class="url" style="float:left;padding: 5px;font-size:1.1em;">${prefix}${(handler.description?.regex) ?: handler.regex}</div>
+	<div class="info" style="float:right;padding: 5px;color:${color}">${handler.description?."$method"?.info}</div>
+	</div>
+	<div class="description" style="clear:both;background-color: rgba(255,255,255,0.8);width:100%; border-top:1px solid ${color};display:none;" id="${id}">
+		<div style="padding:5px;">
+${result.fillTemplate(handler.description?."$method"?.description)}
+		</div>
+	</div>
+</div>
+		<% } %>
+	<% } %>
+<% } %>
+</div>
+${ util.include('footer') }

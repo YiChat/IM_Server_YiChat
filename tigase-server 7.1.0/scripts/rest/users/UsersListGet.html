@@ -1,0 +1,18 @@
+${ util.include('header', [title:'All users']) }
+<table style="margin: auto;">
+<tr>
+<th>Avatar</th>
+<th>User JID</th>
+</tr>
+<% result.users.items.each { user -> %>
+<tr>
+<td>
+<img style="max-height: 50px; max-width: 50px;" src="${util.link("/avatar/" + user)}" />
+</td>
+<td>
+<a href="${util.link("/user/"+user)}">${user}</a>
+</td>
+</tr>
+<% } %>
+</table>
+${ util.include('footer') }

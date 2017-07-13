@@ -1,0 +1,248 @@
+/*
+ * Tigase Jabber/XMPP Server
+ * Copyright (C) 2004-2012 "Artur Hefczyc" <artur.hefczyc@tigase.org>
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, version 3 of the License.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program. Look for COPYING file in the top folder.
+ * If not, see http://www.gnu.org/licenses/.
+ *
+ * $Rev$
+ * Last modified by $Author$
+ * $Date$
+ */
+package tigase.db;
+
+//~--- JDK imports ------------------------------------------------------------
+
+import tigase.stats.StatisticsProviderIfc;
+import tigase.stats.StatisticsList;
+import tigase.xmpp.BareJID;
+
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.util.Map;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+
+//~--- classes ----------------------------------------------------------------
+
+/**
+ * Created: Sep 4, 2010 2:13:22 PM
+ * 
+ * @author <a href="mailto:artur.hefczyc@tigase.org">Artur Hefczyc</a>
+ * @version $Rev$
+ */
+public class DataRepositoryPool implements DataRepository, StatisticsProviderIfc {
+	private static final Logger log = Logger.getLogger(DataRepositoryPool.class.getName());
+
+	// ~--- fields ---------------------------------------------------------------
+
+	private CopyOnWriteArrayList<DataRepository> repoPool =
+			new CopyOnWriteArrayList<DataRepository>();
+	private String resource_uri = null;
+	private dbTypes database = null;
+
+	// ~--- methods --------------------------------------------------------------
+
+	/**
+	 * Method description
+	 * 
+	 * 
+	 * @param repo
+	 */
+	public void addRepo(DataRepository repo) {
+		repoPool.addIfAbsent(repo);
+	}
+
+	/**
+	 * Method description
+	 * 
+	 * 
+	 * 
+	 */
+	public DataRepository takeRepo(BareJID user_id) {
+		int idx = user_id != null ? Math.abs(user_id.hashCode() % repoPool.size()) : 0;
+		DataRepository result = null;
+		try {
+			result = repoPool.get(idx);
+		} catch (IndexOutOfBoundsException ioobe) {
+			result = repoPool.get(0);
+		}
+		return result;
+	}
+
+	@Override
+	public DataRepository takeRepoHandle(BareJID user_id) {
+		return takeRepo(user_id);
+	}
+
+	@Override
+	public void releaseRepoHandle(DataRepository repo) {
+		// addRepo(repo);
+	}
+
+	@Override
+	public boolean checkTable(String tableName) throws SQLException {
+		DataRepository repo = takeRepo(null);
+
+		if (repo != null) {
+			return repo.checkTable(tableName);
+		} else {
+			log.log(Level.WARNING, "repo is NULL, pool empty? - {0}", repoPool.size());
+		}
+
+		return false;
+	}
+
+	@Override
+	public boolean checkTable(String tableName, String createTableQuery) throws SQLException {
+		DataRepository repo = takeRepo(null);
+
+		if (repo != null) {
+			return repo.checkTable(tableName, createTableQuery);
+		} else {
+			log.log(Level.WARNING, "repo is NULL, pool empty? - {0}", repoPool.size());
+		}
+
+		return false;
+	}
+
+	@Override
+	public Statement createStatement(BareJID user_id) throws SQLException {
+		DataRepository repo = takeRepo(user_id);
+
+		if (repo != null) {
+			return repo.createStatement(user_id);
+		} else {
+			log.log(Level.WARNING, "repo is NULL, pool empty? - {0}", repoPool.size());
+		}
+
+		return null;
+	}
+
+	@Override
+	public PreparedStatement getPreparedStatement(BareJID user_id, String stIdKey) throws SQLException {
+		DataRepository repo = takeRepo(user_id);
+
+		if (repo != null) {
+			return repo.getPreparedStatement(user_id, stIdKey);
+		} else {
+			log.log(Level.WARNING, "repo is NULL, pool empty? - {0}", repoPool.size());
+		}
+
+		return null;
+	}
+
+	@Override
+	public String getResourceUri() {
+		return resource_uri;
+	}
+
+
+	@Override
+	public dbTypes getDatabaseType() {
+		return database;
+	}
+
+	@Override
+	public void getStatistics(String compName, StatisticsList list) {
+		list.add(compName, "repository " + getResourceUri() + " connections count", repoPool.size(), Level.FINE);
+		for (DataRepository repo : repoPool) {
+			if (repo instanceof StatisticsProviderIfc) {
+				((StatisticsProviderIfc) repo).getStatistics(compName, list);
+			}
+		}
+	}
+
+	// ~--- methods --------------------------------------------------------------
+
+	@Override
+	public void initPreparedStatement(String stIdKey, String query) throws SQLException {
+		for (DataRepository dataRepository : repoPool) {
+			dataRepository.initPreparedStatement(stIdKey, query);
+		}
+	}
+
+	@Override
+	public void initPreparedStatement(String stIdKey, String query, int autoGeneratedKeys) throws SQLException {
+		for (DataRepository dataRepository : repoPool) {
+			dataRepository.initPreparedStatement(stIdKey, query, autoGeneratedKeys);
+		}
+	}
+	
+	@Override
+	public void initRepository(String resource_uri, Map<String, String> params)
+			throws DBInitException {
+		this.resource_uri = resource_uri;
+		
+		for (DataRepository dataRepository : repoPool) {
+			dataRepository.initRepository(resource_uri, params);
+			this.database = dataRepository.getDatabaseType();
+		}
+		if ( this.database == null ){
+			if ( resource_uri.startsWith( "jdbc:postgresql" ) ){
+				database = dbTypes.postgresql;
+			} else if ( resource_uri.startsWith( "jdbc:mysql" ) ){
+				database = dbTypes.mysql;
+			} else if ( resource_uri.startsWith( "jdbc:derby" ) ){
+				database = dbTypes.derby;
+			} else if ( resource_uri.startsWith( "jdbc:jtds:sqlserver" ) ){
+				database = dbTypes.jtds;
+			} else if ( resource_uri.startsWith( "jdbc:sqlserver" ) ){
+				database = dbTypes.sqlserver;
+			}
+		}
+	}
+
+	@Override
+	public void release(Statement stmt, ResultSet rs) {
+		if (rs != null) {
+			try {
+				rs.close();
+			} catch (SQLException sqlEx) {
+			}
+		}
+
+		if (stmt != null) {
+			try {
+				stmt.close();
+			} catch (SQLException sqlEx) {
+			}
+		}
+	}
+
+	@Override
+	public void startTransaction() throws SQLException {
+		// TODO Auto-generated method stub
+	}
+
+	@Override
+	public void commit() throws SQLException {
+		// TODO Auto-generated method stub
+	}
+
+	@Override
+	public void rollback() throws SQLException {
+		// TODO Auto-generated method stub
+
+	}
+
+	@Override
+	public void endTransaction() throws SQLException {
+		// TODO Auto-generated method stub
+
+	}
+
+}

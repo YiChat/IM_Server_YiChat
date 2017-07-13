@@ -1,0 +1,184 @@
+${ util.include('header', [title: tigase.util.DNSResolverFactory.getInstance().getDefaultHost() + ' statistics', 
+    imports: [
+	[ type: 'css', content:'.chart-bar-legend { display: block; } .chart-bar-legend > li { width: 100; display: block; padding: 2px; }' ]
+    ]]) }
+<script src="${request.getContextPath()}/static/Chart.min.js" ></script>
+<script src="${request.getContextPath()}/static/chart_legend_templates.js" ></script>
+
+<% 
+	def compNames = [];
+	compNames.addAll(result.stats.keySet());
+	compNames.sort();
+	def packetsLastSecond = [
+		labels : [],
+		datasets: [[
+			label: 'Last second packets',
+			fillColor: "rgba(151,187,205,0.5)",
+			strokeColor: "rgba(151,187,205,0.8)",
+			highlightFill: "rgba(151,187,205,0.75)",
+			highlightStroke: "rgba(151,187,205,1)",
+			data: []
+		]]
+	];
+	compNames.each { compName ->
+		def value = result.stats[compName].data.find { it.var.contains('Last second packets') };
+		if (!value) return;
+		packetsLastSecond.labels.add(compName);
+		packetsLastSecond.datasets[0].data.add(Integer.parseInt(value.value));
+	}
+
+	def packetsLastMinute = [
+		labels : [],
+		datasets: [[
+			label: 'Last minute packets',
+			fillColor: "rgba(151,187,205,0.5)",
+			strokeColor: "rgba(151,187,205,0.8)",
+			highlightFill: "rgba(151,187,205,0.75)",
+			highlightStroke: "rgba(151,187,205,1)",
+			data: []
+		]]
+	];
+	compNames.each { compName ->
+		def value = result.stats[compName].data.find { it.var.contains('Last minute packets') };
+		if (!value) return;
+		packetsLastMinute.labels.add(compName);
+		packetsLastMinute.datasets[0].data.add(Integer.parseInt(value.value));
+	}	
+	
+	def packetsLastHour = [
+		labels : [],
+		datasets: [[
+			label: 'Last hour packets',
+			fillColor: "rgba(151,187,205,0.5)",
+			strokeColor: "rgba(151,187,205,0.8)",
+			highlightFill: "rgba(151,187,205,0.75)",
+			highlightStroke: "rgba(151,187,205,1)",
+			data: []
+		]]
+	];
+	compNames.each { compName ->
+		def value = result.stats[compName].data.find { it.var.contains('Last hour packets') };
+		if (!value) return;
+		packetsLastHour.labels.add(compName);
+		packetsLastHour.datasets[0].data.add(Integer.parseInt(value.value));
+	}		
+	def tmp = null;
+%>
+
+<table style='border-spacing: 0px;'>
+	<tr>
+		<td style="margin:0px;vertical-align:top; background-color: lightgray; padding: 8px;">
+			<h3>Components:</h3>
+			<ul style='padding: 0px;width: 150px;'><% compNames.each { %>
+				<li style='padding:0px; margin: 0px; display:block;'><a style="display:block;" href='${it}'>${it}</a></li>
+			<% } %></ul>
+		</td>
+		<td>
+
+<table>
+	<tr>
+		<td><% def mr = result.stats['message-router'].data; 
+			   tmp  = Float.parseFloat(mr.find { it.var.endsWith('Load average') }?.value?.replace(',','.'));
+			   def loadAverage = [[
+					value : tmp,
+					color:"#F7464A",
+					highlight: "#FF5A5E",
+					label : 'Load'
+			   ],[
+					value : (Float.parseFloat(mr.find { it.var.endsWith('CPUs no') }?.value)-tmp),
+					color: "#46BFBD",
+					highlight: "#5AD3D1",
+					label : 'Free'
+			   ]];
+			   tmp = Float.parseFloat(mr.find { it.var.endsWith('CPU usage [%]') }?.value.replace(',','.'));
+			   def cpuUsage = [[
+					value : tmp,
+					color:"#F7464A",
+					highlight: "#FF5A5E",
+					label : 'Used'
+			   ],[
+					value : (((Float) 100) - (tmp)),
+					color: "#46BFBD",
+					highlight: "#5AD3D1",
+					label : 'Free'			   
+			   ]];
+			   tmp = Float.parseFloat(mr.find { it.var.endsWith('HEAP usage [%]') }?.value.replace(',','.'));
+			   def memHeapUsage = [[
+					value : tmp,
+					color:"#F7464A",
+					highlight: "#FF5A5E",
+					label : 'Used'
+			   ],[
+					value : (((Float) 100) - (tmp)),
+					color: "#46BFBD",
+					highlight: "#5AD3D1",
+					label : 'Free'				   
+			   ]];
+			%>
+			<table>
+				<tr><td colspan='3'>Uptime: ${mr.find { it.var.endsWith('Uptime') }?.value }<br/>CPUs no: ${mr.find { it.var.endsWith('CPUs no') }?.value}<br/>Threads count: ${mr.find { it.var.endsWith('Threads count') }?.value}</td></tr> 
+				<tr>
+					<td><canvas id='loadAverage' width='300' height='200'></canvas></td>
+					<td><canvas id='cpuUsage' width='300' height='200'></canvas></td>
+					<td><canvas id='memHeapUsage' width='300' height='200'></canvas></td>
+				</tr>
+				<tr>
+					<td style='text-align: center'>Load average: ${mr.find { it.var.endsWith('Load average') }?.value }</td>
+					<td style='text-align: center'>CPU usage [%]: ${mr.find { it.var.endsWith('CPU usage [%]') }?.value.replace(',','.')}</td>
+					<td style='text-align: center'>HEAP usage [%]: ${mr.find { it.var.endsWith('HEAP usage [%]') }?.value.replace(',','.')}</td>
+				</tr>
+			</table>
+		</td>
+	</tr>
+	<tr>
+		<td>
+			<canvas id="packetsLastSecond" width="800" height="400"></canvas>
+			<div id='packetsLastSecond-legend'></div>
+		</td>
+	</tr>
+	<tr>
+		<td>
+			<canvas id="packetsLastMinute" width="800" height="400"></canvas>
+			<div id='packetsLastMinute-legend'></div>
+		</td>
+	</tr>
+	<tr>
+		<td>
+			<canvas id="packetsLastHour" width="800" height="400"></canvas>
+			<div id='packetsLastHour-legend'></div>
+		</td>
+	</tr>
+</table>
+
+<script>
+	var loadAverageData = ${groovy.json.JsonOutput.toJson(loadAverage)};
+	var loadAverageCtx = document.getElementById("loadAverage").getContext("2d");
+	var loadAverageChart = new Chart(loadAverageCtx).Doughnut(loadAverageData);
+
+	var cpuUsageData = ${groovy.json.JsonOutput.toJson(cpuUsage)};
+	var cpuUsageCtx = document.getElementById("cpuUsage").getContext("2d");
+	var cpuUsageChart = new Chart(cpuUsageCtx).Doughnut(cpuUsageData);
+
+	var memHeapUsageData = ${groovy.json.JsonOutput.toJson(memHeapUsage)};
+	var memHeapUsageCtx = document.getElementById("memHeapUsage").getContext("2d");
+	var memHeapUsageChart = new Chart(memHeapUsageCtx).Doughnut(memHeapUsageData);	
+	
+	var packetsLastSecondData =  ${groovy.json.JsonOutput.toJson(packetsLastSecond)};	
+	var packetsLastSecondCtx = document.getElementById("packetsLastSecond").getContext("2d");
+	var packetsLastSecondChart = new Chart(packetsLastSecondCtx).Bar(packetsLastSecondData, { legendTemplate : templateLegends.bar });
+	document.getElementById('packetsLastSecond-legend').innerHTML = packetsLastSecondChart.generateLegend();
+
+	var packetsLastMinuteData =  ${groovy.json.JsonOutput.toJson(packetsLastMinute)};	
+	var packetsLastMinuteCtx = document.getElementById("packetsLastMinute").getContext("2d");
+	var packetsLastMinuteChart = new Chart(packetsLastMinuteCtx).Bar(packetsLastMinuteData, { legendTemplate : templateLegends.bar });
+	document.getElementById('packetsLastMinute-legend').innerHTML = packetsLastMinuteChart.generateLegend();
+
+	var packetsLastHourData =  ${groovy.json.JsonOutput.toJson(packetsLastHour)};	
+	var packetsLastHourCtx = document.getElementById("packetsLastHour").getContext("2d");
+	var packetsLastHourChart = new Chart(packetsLastHourCtx).Bar(packetsLastHourData, { legendTemplate : templateLegends.bar });
+	document.getElementById('packetsLastHour-legend').innerHTML = packetsLastHourChart.generateLegend();
+</script>
+		</td>
+	</tr>
+</table>
+${ util.include('footer') }
