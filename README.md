@@ -50,8 +50,8 @@
  	
 ##2.5 登录测试
 
-![](http://f.hiphotos.baidu.com/image/pic/item/b64543a98226cffc331d4318b3014a90f603ea61.jpg)
-![](http://g.hiphotos.baidu.com/image/pic/item/908fa0ec08fa513d78189074376d55fbb3fbd9ee.jpg)
+![](/images/002.jpg)
+![](/images/001.jpg))
 	
 #3.为所有消息加上时间戳 C-101
 	 OfflineMessages.java  
